@@ -4,8 +4,8 @@ The project is a Forex anomaly detection and compliance system designed to monit
 
 
 ## Architecture Overview
-
-                ┌────────────────────┐
+```text
+                   ┌────────────────────┐
                 │ Generate Synthetic │
                 │   Trade Dataset    │
                 │ (data_generator.py)│
@@ -23,7 +23,7 @@ The project is a Forex anomaly detection and compliance system designed to monit
                 │ (train_models.py)  │
                 └─────────┬──────────┘
                           │
-                          ▼                         
+                          ▼
              ┌────────────────────────────┐
              │  FastAPI Inference Layer   │
              │         (app.py)           │
@@ -49,7 +49,7 @@ The project is a Forex anomaly detection and compliance system designed to monit
         ┌──────────────────────────────┐
         │ API Response / Kafka Alerts  │
         └──────────────────────────────┘
-
+```
 ## What I have done
 1. data_generator.py:
 - The code generates a synthetic forex events dataset with diverse users, including user_id, country, device_preference, risk_profile, and kyc_status. 
@@ -210,6 +210,7 @@ I chose Render because it allows very fast and simple deployment of backend APIs
 
 
 ## Project Structure
+```text
 ForexGuard/
 │
 ├── data/
@@ -233,7 +234,7 @@ ForexGuard/
 ├── Dockerfile
 ├── requirements.txt
 └── README.md
-
+```
 
 
 
