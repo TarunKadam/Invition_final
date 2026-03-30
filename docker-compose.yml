@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:latest
+    container_name: redpanda
+    command:
+      - redpanda start
+      - --overprovisioned
+      - --smp 1
+      - --memory 1G
+      - --kafka-addr plaintext://0.0.0.0:29092,outside://0.0.0.0:9092
+      - --advertise-kafka-addr plaintext://redpanda:29092,outside://localhost:9092
+    ports:
+      - "9092:9092"
+  
+  console:
+    image: docker.redpanda.com/redpandadata/console:latest
+    container_name: redpanda-console
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        echo "kafka: { brokers: ['redpanda:29092'] }" > /tmp/config.yaml
+        /app/console --config.filepath=/tmp/config.yaml
+    ports:
+      - "8080:8080"
+    depends_on:
+      - redpanda
+  api:
+      build: .
+      container_name: forexguard-api
+      ports:
+        - "8000:8000"
+      environment:
+        - KAFKA_BROKER=redpanda:29092
+      depends_on:
+        - redpanda
