@@ -79,7 +79,7 @@ The project is a Forex anomaly detection and compliance system designed to monit
 - It accepts trade activity via a TradeActivity JSON payload, computes anomaly scores using pre-trained models (Isolation Forest + LSTM), and performs rule-based checks for specific high-risk patterns. 
 - Detected anomalies are summarized using an LLM and optionally sent to Kafka for alerting. 
 - The app also tracks per-user and per-IP histories to identify patterns over time.
-- It pushes alerts to a compliance_alerts topic, helping in real-time messaging
+- It pushes alerts to a compliance_alerts, a topic in Redpanda cluster, helping in real-time messaging.
 
 ## Setup Instructions
 1. Clone Repository
@@ -105,22 +105,18 @@ This creates featured_events.csv
 python train_models.py
 advanced_model.pt is generated in \models folder 
 
-7. Start FastAPI Server
-python app.py
-4 files, baseline.pkl, scaler.pkl, shap_explainer.pkl and feature_names.pkl, are generated in \models folder
-
-8. Have Docker Desktop open.
-
-9. Open Swagger UI 
-http://localhost:7860/docs#/
-
-10. Open RedPanda Compliance Alert website, a user dashboard
-Write a test JSON in Swagger UI and check here. The output will be visible here. 
-http://localhost:8080/topics/compliance_alerts/?s=200&pageSize=10&sort=
-Confirm that the Docker container, redpanda-console, is running for local hosting.
-
-12. For hosting, HuggingFace is used. We push the Dockerfile into HuggingFace for hosting purposes
-Dockerfile and docker-compose.yml files are present in this repository.
+7. For hosting, Render is used with Redpanda for storing alerts
+8. Put these environment variables as follows in Render:
+   HF_TOKEN=your_huggingface_token
+  KAFKA_BOOTSTRAP_SERVERS=your_kafka_bootstrap_servers
+  KAFKA_BROKER=your_kafka_broker
+  KAFKA_USERNAME=your_kafka_username
+  KAFKA_PASSWORD=your_kafka_password
+  KAFKA_SASL_MECHANISM=SCRAM-SHA-256
+  KAFKA_SECURITY_PROTOCOL=SASL_SSL
+9. Deploy in Render.
+10. You will encounter this message:  Available at your primary URL https://invition-final.onrender.com. Give your input on this URL.
+11. On executing it, an alert is sent to Redpanda compliance_alerts topic if the input is an anomaly.
 
 
 
@@ -204,15 +200,14 @@ With proper encoding and scaling, LSTM Autoencoder can learn from heterogeneous 
 5. Scalability:
 Can be extended to transformers or variational autoencoders (VAE) for more complex temporal or probabilistic anomaly modeling.
 
-## Assumptions, Improvements and Limitations
-1. An attempt was made to deploy the project on Hugging Face Spaces for demonstration purposes. However, deployment was unsuccessful due to resource constraints and dependency limitations, particularly with heavy libraries such as PyTorch and SHAP, which require higher memory and longer build times. Additionally, the model size and runtime requirements exceeded the platform’s free-tier capabilities, leading to build failures and execution issues. As a result, the project was successfully demonstrated in a local environment, ensuring full functionality, real-time processing, and stable performance without resource limitations.
+##Hosting
+I chose Render because it allows very fast and simple deployment of backend APIs with minimal configuration. My project involves FastAPI endpoints and streaming components, which are not well supported by Hugging Face. While AWS provides full flexibility, it requires significant setup and infrastructure management. Since this was a prototype with time constraints, Render was the most efficient and practical choice.
 
-2. AWS, while powerful, is overkill for a quick demo due to complex setup, higher resource requirements, and potential unexpected costs.
-3. Render, though simpler, struggles with heavy ML dependencies like PyTorch and SHAP due to strict RAM limits and long build times. Both platforms introduce friction for fast deployment, making them less suitable for rapid prototyping.
-4. The system design includes integration with the Mistral-7B model via the Hugging Face API, as reflected in the app.py implementation. However, due to API access constraints (such as missing/limited API token usage and runtime restrictions), the LLM inference calls were not executed during deployment and testing. Despite this, the architecture is fully prepared for LLM-based summarization, and the integration can be activated seamlessly once valid API access and sufficient resources are available.
-5. Creating a frontend dashboard
-6. Experiment tracking using MLflow or Weights & Biases was planned; however, it was not implemented due to the evolving nature of the pipeline and prioritization of core system functionality. This can be incorporated in future iterations once the experimentation workflow is stabilized.
-7. The synthetic dataset generated is symbolic of real-world data, hence its very unbalanced with respect to the number of anomalies among total entries. This causes Isolation Model to have similar performance metrics compared to that of LSTM Autoencoder model.
+## Assumptions, Improvements and Limitations
+1. LLM Generated explanation of anaomaly
+2. Creating a frontend dashboard
+3. Experiment tracking using MLflow or Weights & Biases was planned; however, it was not implemented due to the evolving nature of the pipeline and prioritization of core system functionality. This can be incorporated in future iterations once the experimentation workflow is stabilized.
+4. The synthetic dataset generated is symbolic of real-world data, hence its very unbalanced with respect to the number of anomalies among total entries. This causes Isolation Model to have similar performance metrics compared to that of LSTM Autoencoder model.
 
 
 ## Project Structure
