@@ -5,7 +5,7 @@ The project is a Forex anomaly detection and compliance system designed to monit
 
 ## Architecture Overview
 ```text
-                   ┌────────────────────┐
+                ┌────────────────────┐
                 │ Generate Synthetic │
                 │   Trade Dataset    │
                 │ (data_generator.py)│
