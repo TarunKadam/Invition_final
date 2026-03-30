@@ -16,8 +16,10 @@ from contextlib import asynccontextmanager
 # ===========================
 # 1. Infrastructure & Globals
 # ===========================
-#KAFKA_BROKER = os.getenv("KAFKA_BROKER", "localhost:9092")
-KAFKA_BROKER = os.getenv("KAFKA_BROKER")
+# Using the keys you set in Render
+KAFKA_BROKER = os.getenv("KAFKA_BOOTSTRAP_SERVERS")
+KAFKA_USER = os.getenv("KAFKA_USERNAME")
+KAFKA_PASS = os.getenv("KAFKA_PASSWORD")
 KAFKA_ENABLED = False
 producer = None
 
@@ -33,16 +35,24 @@ last_kyc_change = defaultdict(lambda: None)
 NEWS_EVENTS = [(13, 30), (14, 0), (19, 0)]  # HH:MM of important news
 UNUSUAL_HOURS = list(range(23, 24)) + list(range(0, 6))
 
-try:
-    producer = KafkaProducer(
-        bootstrap_servers=[KAFKA_BROKER],
-        value_serializer=lambda v: json.dumps(v).encode('utf-8'),
-        request_timeout_ms=1000
-    )
-    KAFKA_ENABLED = True
-    print("Kafka Connected")
-except Exception as e:
-    print(f" Running in Demo Mode: Kafka not connected ({e})")
+# Updated Kafka Connection with SASL_SSL Security
+if KAFKA_BROKER and KAFKA_USER and KAFKA_PASS:
+    try:
+        producer = KafkaProducer(
+            bootstrap_servers=[KAFKA_BROKER],
+            value_serializer=lambda v: json.dumps(v).encode('utf-8'),
+            security_protocol="SASL_SSL",
+            sasl_mechanism="SCRAM-SHA-256",
+            sasl_plain_username=KAFKA_USER,
+            sasl_plain_password=KAFKA_PASS,
+            request_timeout_ms=5000  # Higher timeout for cloud latency
+        )
+        KAFKA_ENABLED = True
+        print("✅ Kafka Connected to Redpanda Cloud")
+    except Exception as e:
+        print(f"❌ Running in Demo Mode: Kafka connection failed ({e})")
+else:
+    print("⚠️ Kafka Credentials missing. Running in Demo Mode.")
 
 # ===========================
 # 2. LSTM Skeleton for Loading
@@ -62,9 +72,7 @@ class LSTMAutoencoder(torch.nn.Module):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup logic (optional)
     yield
-    # Shutdown logic
     if producer:
         producer.flush()
 
@@ -84,6 +92,7 @@ app.add_middleware(
 # 4. Load Models & Assets
 # ===========================
 base_dir = os.path.dirname(os.path.abspath(__file__))
+# Note: Ensure this path is correct relative to your app.py on Render
 model_dir = os.path.join(base_dir, "..", "models")
 
 iso_forest = joblib.load(os.path.join(model_dir, "baseline.pkl"))
@@ -178,17 +187,14 @@ def iso_score(data_array):
     return -iso_forest.decision_function(X_flat)[0]
 
 # ===========================
-# 8. Graph / Network-Level Anomaly (8.5)
+# 8. Graph / Network-Level Anomaly
 # ===========================
 def graph_network_anomaly(user_id, user_ip, trade_time, lot_size):
     anomaly_flags = []
-
-    # Multiple accounts sharing same IP
     users_on_ip = ip_history[user_ip]
     if len(users_on_ip) > 3:
         anomaly_flags.append("IP_HUB")
 
-    # Synchronized trades (same lot in short time across accounts)
     for other_user, trades in user_trade_history.items():
         if other_user == user_id:
             continue
@@ -197,10 +203,8 @@ def graph_network_anomaly(user_id, user_ip, trade_time, lot_size):
                 anomaly_flags.append("SYNCHRONIZED_TRADES")
                 break
 
-    # Record this trade
     user_trade_history[user_id].append((trade_time, lot_size))
     ip_history[user_ip].add(user_id)
-
     return anomaly_flags
 
 # ===========================
@@ -208,18 +212,16 @@ def graph_network_anomaly(user_id, user_ip, trade_time, lot_size):
 # ===========================
 @app.post("/score")
 async def score_trade(data: TradeActivity):
-    # Prepare feature array
     data_array = np.array([getattr(data, f) for f in features_list])
 
-    # Model scores
     mse = lstm_score(data_array)
     iso_anom = iso_score(data_array)
-    is_anomaly = (mse > 10.0) or (iso_anom < np.percentile([-iso_forest.decision_function(np.tile(data_array,(5,1)).reshape(1,-1))[0]], 95))
+    is_anomaly = (mse > 10.0) or (iso_anom < -0.5) # Simplified threshold check
 
-    # Behavioral / Temporal / Financial / Login checks (8.1–8.7)
     current_hour = datetime.now().hour
     culprit = "Normal"
 
+    # Rule-based overrides
     if current_hour in UNUSUAL_HOURS or data.failed_attempts >= 3 or (data.user_id in user_login_stats and user_login_stats[data.user_id]["last_ip"] != data.user_ip):
         culprit = "Login_Anomaly"
         is_anomaly = True
@@ -245,14 +247,12 @@ async def score_trade(data: TradeActivity):
         culprit = "Account_Risk"
         is_anomaly = True
 
-    # --- 8.5 Graph / Network-Level check ---
     trade_time = datetime.now()
     graph_flags = graph_network_anomaly(data.user_id, data.user_ip, trade_time, data.lot_size)
     if graph_flags:
         culprit = "Graph/Network Anomaly: " + ",".join(graph_flags)
         is_anomaly = True
 
-    # Generate summary
     summary = generate_llm_summary(data.user_id, culprit, data.amount, data.user_ip) if is_anomaly else "Normal transaction patterns observed."
 
     result = {"user_id": data.user_id, "is_anomaly": is_anomaly, "culprit": culprit, "summary": summary}
@@ -260,24 +260,16 @@ async def score_trade(data: TradeActivity):
 
     if is_anomaly and KAFKA_ENABLED:
         try:
-            #producer.send('compliance_alerts', value=result_safe).get(timeout=10)
             producer.send('compliance_alerts', value=result_safe)
-        except:
-            pass
+        except Exception as e:
+            print(f"Error sending to Kafka: {e}")
 
     return result_safe
 
-# ===========================
-# 10. Root Endpoint
-# ===========================
 @app.get("/")
 async def root():
     return RedirectResponse(url="/docs")
 
-
-# ===========================
-# 11. Run Server
-# ===========================
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 10000))
