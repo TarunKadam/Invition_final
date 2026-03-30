@@ -6,22 +6,21 @@ The project is a Forex anomaly detection and compliance system designed to monit
 ## Architecture Overview
 
                 ┌────────────────────┐
-                │Generate Synthetic  |
-                |     dataset of     |
-                |  raw trade events  |
-                |(data_generator.py) |
+                │ Generate Synthetic │
+                │   Trade Dataset    │
+                │ (data_generator.py)│
                 └─────────┬──────────┘
                           │
                           ▼
                 ┌────────────────────┐
                 │ Feature Engineering│
-                │ (processor.py)     │
+                │  (processor.py)    │
                 └─────────┬──────────┘
                           │
                           ▼
                 ┌────────────────────┐
                 │   Train ML Models  │
-                │  (train_models.py) │
+                │ (train_models.py)  │
                 └─────────┬──────────┘
                           │
                           ▼                         
@@ -33,23 +32,23 @@ The project is a Forex anomaly detection and compliance system designed to monit
         ┌─────────────────┼─────────────────┐
         ▼                 ▼                 ▼
  ┌────────────┐   ┌────────────────┐   ┌────────────────────┐
- │ Isolation  │   │LSTM Autoencoder│   │     Rule Engine    │
- │ Forest     │   │ (Temporal ML)  │   │ (Decting Anomalies)│
+ │ Isolation  │   │ LSTM Autoencoder│  │    Rule Engine      │
+ │ Forest     │   │ (Temporal ML)   │  │ (Heuristic Checks)  │
  └────────────┘   └────────────────┘   └────────────────────┘
         │                 │                 │
         └──────────┬──────┴──────┬──────────┘
                    ▼             ▼
-                ┌────────────────────────┐
-                │ Final Risk Decision    │
-                └──────────┬─────────────┘
-                           ▼
-            ┌──────────────────────────────┐
-            │ LLM Risk Summary Generator   │
-            └──────────────┬───────────────┘
-                           ▼
-            ┌──────────────────────────────┐
-            │ API Response / Kafka Alerts  │
-            └──────────────────────────────┘
+            ┌────────────────────────┐
+            │  Final Risk Decision   │
+            └──────────┬─────────────┘
+                       ▼
+        ┌──────────────────────────────┐
+        │ LLM Risk Summary Generator   │
+        └──────────────┬───────────────┘
+                       ▼
+        ┌──────────────────────────────┐
+        │ API Response / Kafka Alerts  │
+        └──────────────────────────────┘
 
 ## What I have done
 1. data_generator.py:
