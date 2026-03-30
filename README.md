@@ -203,7 +203,7 @@ Can be extended to transformers or variational autoencoders (VAE) for more compl
 I chose Render because it allows very fast and simple deployment of backend APIs with minimal configuration. My project involves FastAPI endpoints and streaming components, which are not well supported by Hugging Face. While AWS provides full flexibility, it requires significant setup and infrastructure management. Since this was a prototype with time constraints, Render was the most efficient and practical choice.
 
 ## Assumptions, Improvements and Limitations
-1. LLM Generated explanation of anaomaly
+1. LLM Generated explanation of anaomaly could not be successfully incorporated due to time constraints
 2. Creating a frontend dashboard
 3. Experiment tracking using MLflow or Weights & Biases was planned; however, it was not implemented due to the evolving nature of the pipeline and prioritization of core system functionality. This can be incorporated in future iterations once the experimentation workflow is stabilized.
 4. The synthetic dataset generated is symbolic of real-world data, hence its very unbalanced with respect to the number of anomalies among total entries. This causes Isolation Model to have similar performance metrics compared to that of LSTM Autoencoder model.
