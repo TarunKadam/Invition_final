@@ -1,6 +1,6 @@
 ## Overview
 
-ForexGuard is designed to detect fraudulent, suspicious, and non-compliant trading behavior using a hybrid approach
+The project is a Forex anomaly detection and compliance system designed to monitor trading, login, financial, behavioral, and network activities in real-time. It combines statistical models, temporal analysis, and LLM-generated summaries to detect suspicious or high-risk patterns across user accounts. Alerts and detailed reports are generated for compliance teams to investigate, and the system supports advanced network-level and temporal anomaly detection. The architecture is scalable, integrates Kafka for real-time events, and can be extended with an interactive dashboard for visualization and auditing.
 
 
 ## Architecture Overview
@@ -57,22 +57,29 @@ ForexGuard is designed to detect fraudulent, suspicious, and non-compliant tradi
 - It simulates a wide range of events (logins, logouts, trades, transactions, KYC, document uploads, orders, margin calls, stop-loss/profit triggers) with event-specific numeric and categorical features. 
 - Anomalies include geo-anomalies, device anomalies, high-risk withdrawals, trade anomalies, and sequences of consecutive anomalous events, all of which can be amplified for LSTM detection. 
 - Certain high-risk events are flagged as is_high_risk_fraud. The final output is a DataFrame with all features, timestamps, anomaly flags, and fraud indicators for model training.
+- I have also inclluded noise in the dataset to replicate real-world datasets
 
 2. processor.py:
 - Reads the forex events CSV and ensures critical columns exist.
 - It generates user-level features including rolling statistics (mean, std, z-score of amount), inter-event times, PnL volatility, IP/device anomaly proxies, clustered trades, and login velocity. 
 - The pipeline captures temporal patterns, unusual trading behavior, and potential anomalies, then outputs a cleaned, feature-rich dataset (featured_events.csv) for model training.
+- I have used Polars instead of Pandas for the following reasons
+   - Polars is significantly faster than Pandas because it uses multi-core parallel processing, unlike Pandas which is single-threaded.
+   -  It also supports lazy evaluation, optimizing the entire query before execution to reduce memory usage and computation time.
+   -   Additionally, its Apache Arrow-based columnar storage and lack of index complexity make it more memory-efficient and less error-prone for large-scale data processing.
 
 3. train_model.py:
 - Implements a baseline Isolation Forest and an advanced LSTM Autoencoder for anomaly detection on forex event sequences.
 - It preprocesses and encodes features, converts them into user-level sequences, and trains the LSTM to reconstruct normal behavior. 
 - Both models generate anomaly scores, which are compared using precision, recall, and F1 metrics, helping evaluate their effectiveness on temporal anomalies.
+- Scaled the LSTM Autoencoder anomaly score to a 0–1 range using a sigmoid function.
 
 4. app.py:
 - This FastAPI app implements ForexGuard compliance monitoring by detecting anomalies across multiple domains: login patterns, financial transactions, trading behavior, behavioral metrics, temporal events, account risk, and graph/network-level anomalies (e.g., multiple accounts on same IP, synchronized trades).
 - It accepts trade activity via a TradeActivity JSON payload, computes anomaly scores using pre-trained models (Isolation Forest + LSTM), and performs rule-based checks for specific high-risk patterns. 
 - Detected anomalies are summarized using an LLM and optionally sent to Kafka for alerting. 
 - The app also tracks per-user and per-IP histories to identify patterns over time.
+- It pushes alerts to a compliance_alerts topic, helping in real-time messaging
 
 ## Setup Instructions
 1. Clone Repository
@@ -102,16 +109,17 @@ advanced_model.pt is generated in \models folder
 python app.py
 4 files, baseline.pkl, scaler.pkl, shap_explainer.pkl and feature_names.pkl, are generated in \models folder
 
-8. Have Docker Desktop open
+8. Have Docker Desktop open.
 
 9. Open Swagger UI 
 http://localhost:7860/docs#/
 
 10. Open RedPanda Compliance Alert website, a user dashboard
-Write a test JSON in Swagger UI and check here. The output will be visible here.
+Write a test JSON in Swagger UI and check here. The output will be visible here. 
 http://localhost:8080/topics/compliance_alerts/?s=200&pageSize=10&sort=
+Confirm that the Docker container, redpanda-console, is running for local hosting.
 
-11. For hosting, HuggingFace is used. We push the Dockerfile into HuggingFace for hosting purposes
+12. For hosting, HuggingFace is used. We push the Dockerfile into HuggingFace for hosting purposes
 Dockerfile and docker-compose.yml files are present in this repository.
 
 
@@ -196,22 +204,18 @@ With proper encoding and scaling, LSTM Autoencoder can learn from heterogeneous 
 5. Scalability:
 Can be extended to transformers or variational autoencoders (VAE) for more complex temporal or probabilistic anomaly modeling.
 
-## Improvements and Limitations
-1. Hosting on HuggingFace can be done. Despite files being correctly uploaded, there were multiple log issues, especially requirements.txt issues.
-2. We can successfully incorporating LLM Mistral-7B via HuggingFace API. It is although mentioned in app.py code.
-3. Creating a frontend dashboard
-4. Use MLflow or Weights & Biases to track model versions, performance metrics, and dataset dri
+## Assumptions, Improvements and Limitations
+1. An attempt was made to deploy the project on Hugging Face Spaces for demonstration purposes. However, deployment was unsuccessful due to resource constraints and dependency limitations, particularly with heavy libraries such as PyTorch and SHAP, which require higher memory and longer build times. Additionally, the model size and runtime requirements exceeded the platform’s free-tier capabilities, leading to build failures and execution issues. As a result, the project was successfully demonstrated in a local environment, ensuring full functionality, real-time processing, and stable performance without resource limitations.
+
+2. AWS, while powerful, is overkill for a quick demo due to complex setup, higher resource requirements, and potential unexpected costs.
+3. Render, though simpler, struggles with heavy ML dependencies like PyTorch and SHAP due to strict RAM limits and long build times. Both platforms introduce friction for fast deployment, making them less suitable for rapid prototyping.
+4. The system design includes integration with the Mistral-7B model via the Hugging Face API, as reflected in the app.py implementation. However, due to API access constraints (such as missing/limited API token usage and runtime restrictions), the LLM inference calls were not executed during deployment and testing. Despite this, the architecture is fully prepared for LLM-based summarization, and the integration can be activated seamlessly once valid API access and sufficient resources are available.
+5. Creating a frontend dashboard
+6. Experiment tracking using MLflow or Weights & Biases was planned; however, it was not implemented due to the evolving nature of the pipeline and prioritization of core system functionality. This can be incorporated in future iterations once the experimentation workflow is stabilized.
+7. The synthetic dataset generated is symbolic of real-world data, hence its very unbalanced with respect to the number of anomalies among total entries. This causes Isolation Model to have similar performance metrics compared to that of LSTM Autoencoder model.
 
 
-
-Uses Mistral-7B (via HuggingFace API):
-
-Converts raw anomaly → human-readable explanation
-Example:
-
-"User shows signs of coordinated trading activity from a shared IP, indicating potential collusion."
-
-📂 Project Structure
+## Project Structure
 ForexGuard/
 │
 ├── data/
@@ -236,44 +240,10 @@ ForexGuard/
 ├── requirements.txt
 └── README.md
 
-⚖️ Assumptions / Trade-offs / Limitations
-✅ Assumptions
-Input data is semi-clean and structured
-Users have consistent identifiers
-IP tracking is reliable
-⚖️ Trade-offs
-Decision	            Trade-off
-Hybrid ML + Rules	More complexity but higher accuracy
-LSTM Autoencoder	Better sequence modeling but slower
-Real-time scoring	Limited historical context
-SHAP explainability	Adds computation overhead
-❌ Limitations
-No real-time distributed streaming pipeline (Kafka optional)
-LSTM trained on limited features (only 4 inputs)
-Rule thresholds are manually tuned
-No user-level long-term profiling (session-based only)
-Depends on external API for LLM summaries
-Demo assumptions (e.g., fixed deposits, bonus simulation)
-🚀 Future Improvements
-🔄 Full Kafka + streaming pipeline
-📈 Online learning models
-🧠 Graph Neural Networks for fraud rings
-📊 Dashboard (React + charts)
-⚡ Redis for real-time state tracking
-🔐 Stronger KYC integration
-🧪 Testing
-
-
-🐳 Docker Support
-
-Build and run:
-
-docker-compose up --build
 
 
 
-The Forex Events Feature Engineering project processes raw Forex event data to generate features for anomaly detection, trading analytics, and user behavior profiling. It works with three main files: forex_events.csv (raw simulator data), featured_events.csv (output with injected and engineered features), and processor.py (a Polars-based feature engineering script). The pipeline uses path-agnostic loading to automatically locate input/output files, applies column guards to inject missing critical columns with defaults (pnl=0.0, user_ip="0.0.0.0", event_type="trade", amount=0.0), and converts timestamps while sorting by user_id and timestamp to enable accurate rolling statistics and inter-event calculations. Engineered features include rolling transaction stats (avg_volume_7d, std_volume_7d, volume_zscore), inter_event_time_delta for event spacing, pnl_volatility for PnL risk, ip_deviation_score as a proxy for device/IP anomalies, is_clustered_trade to flag events occurring within 10 seconds, and login_velocity_6h to track login frequency. All original columns such as user_id, event_type, amount, device info, trade details, KYC information, and session data are preserved. The pipeline is fast and memory-efficient with Polars, automatically handles missing data, and produces a dataset ready for anomaly detection, fraud analysis, and behavioral modeling.
 
 
 
-The train_models.py script trains both baseline and advanced anomaly detection models on engineered Forex event features. It reads featured_events.csv and selects key features (amount, margin_usage, login_velocity_6h, volume_zscore) for modeling. A baseline IsolationForest is trained for quick anomaly detection, and a SHAP explainer is generated on a subset of 2000 rows to provide feature-level interpretability. An advanced LSTM Autoencoder is trained to capture temporal anomalies, using standardized input and a small hidden dimension for compression and memory efficiency. All models, scalers, feature names, and SHAP explainers are saved to a models/ directory, making them ready for integration with downstream fraud detection and behavioral analysis pipelines. The workflow is fully compatible with the output of processor.py and leverages both rolling and temporal feature patterns for accurate anomaly identification.
+
